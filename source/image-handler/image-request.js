@@ -11,6 +11,7 @@
  *  and limitations under the License.                                                                                *
  *********************************************************************************************************************/
 
+const StyleMapping = require('./style-mapping');
 const ThumborMapping = require('./thumbor-mapping');
 
 class ImageRequest {
@@ -132,7 +133,7 @@ class ImageRequest {
                 const sourceBuckets = this.getAllowedSourceBuckets();
                 return sourceBuckets[0];
             }
-        } else if (requestType === "Thumbor" || requestType === "Custom") {
+        } else if (requestType === "Thumbor" || requestType === "Custom" || requestType === "Style") {
             // Use the default image source bucket env var
             const sourceBuckets = this.getAllowedSourceBuckets();
             return sourceBuckets[0];
@@ -151,7 +152,11 @@ class ImageRequest {
      * @param {String} requestType - Image handler request type.
      */
     parseImageEdits(event, requestType) {
-        if (requestType === "Default") {
+        if (requestType === 'Style') {
+            const styleMapping = new StyleMapping();
+            styleMapping.process(event);
+            return styleMapping.edits;
+        } else if (requestType === "Default") {
             const decoded = this.decodeRequest(event);
             return decoded.edits;
         } else if (requestType === "Thumbor") {
@@ -189,6 +194,10 @@ class ImageRequest {
             return decodeURIComponent(event["path"].replace(/\d+x\d+\/|filters[:-][^/;]+|\/fit-in\/+|^\/+/g,'').replace(/^\/+/,''));
         }
 
+        if (requestType === "Style")  {
+            return event["path"].replace(/!([\w_-]+)/, '');
+        }
+
         // Return an error for all other conditions
         throw ({
             status: 404,
@@ -205,31 +214,7 @@ class ImageRequest {
      * @param {Object} event - Lambda request body.
     */
     parseRequestType(event) {
-        const path = event["path"];
-        // ----
-        const matchDefault = new RegExp(/^(\/?)([0-9a-zA-Z+\/]{4})*(([0-9a-zA-Z+\/]{2}==)|([0-9a-zA-Z+\/]{3}=))?$/);
-        const matchThumbor = new RegExp(/^(\/?)((fit-in)?|(filters:.+\(.?\))?|(unsafe)?).*(.+jpg|.+png|.+webp|.+tiff|.+jpeg)$/i);
-        const matchCustom = new RegExp(/(\/?)(.*)(jpg|png|webp|tiff|jpeg)/i);
-        const definedEnvironmentVariables = (
-            (process.env.REWRITE_MATCH_PATTERN !== "") &&
-            (process.env.REWRITE_SUBSTITUTION !== "") &&
-            (process.env.REWRITE_MATCH_PATTERN !== undefined) &&
-            (process.env.REWRITE_SUBSTITUTION !== undefined)
-        );
-        // ----
-        if (matchDefault.test(path)) {  // use sharp
-            return 'Default';
-        } else if (matchCustom.test(path) && definedEnvironmentVariables) {  // use rewrite function then thumbor mappings
-            return 'Custom';
-        } else if (matchThumbor.test(path)) {  // use thumbor mappings
-            return 'Thumbor';
-        } else {
-            throw {
-                status: 400,
-                code: 'RequestTypeError',
-                message: 'The type of request you are making could not be processed. Please ensure that your original image is of a supported file type (jpg, png, tiff, webp) and that your image request is provided in the correct syntax. Refer to the documentation for additional guidance on forming image requests.'
-            };
-        }
+        return "Style";
     }
 
     /**
