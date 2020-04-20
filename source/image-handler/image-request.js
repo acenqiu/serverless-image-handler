@@ -37,6 +37,7 @@ class ImageRequest {
             let outputFormat = this.getOutputFormat(event);
             if (this.edits && this.edits.toFormat) {
                 this.outputFormat = this.edits.toFormat;
+                delete this.edits.toFormat;
             } else if (outputFormat) {
                 this.outputFormat = outputFormat;
             }

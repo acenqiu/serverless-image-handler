@@ -22,8 +22,9 @@ describe('setup()', function() {
         it(`Should pass when a default image request is provided and populate
             the ImageRequest object with the proper values`, async function() {
             // Arrange
+            const path = '/aws_sv/pictures/original/202004/536870967/00C610795A694E0A906823335D889AC3.jpg'
             const event = {
-                path : '/eyJidWNrZXQiOiJ2YWxpZEJ1Y2tldCIsImtleSI6InZhbGlkS2V5IiwiZWRpdHMiOnsiZ3JheXNjYWxlIjp0cnVlfSwib3V0cHV0Rm9ybWF0IjoianBlZyJ9'
+                path : path + '!style'
             }
             process.env = {
                 SOURCE_BUCKETS : "validBucket, validBucket2"
@@ -32,7 +33,7 @@ describe('setup()', function() {
             const S3 = require('aws-sdk/clients/s3');
             const sinon = require('sinon');
             const getObject = S3.prototype.getObject = sinon.stub();
-            getObject.withArgs({Bucket: 'validBucket', Key: 'validKey'}).returns({
+            getObject.withArgs({Bucket: 'validBucket', Key: path}).returns({
                 promise: () => { return {
                     Body: Buffer.from('SampleImageContent\n')
                 }}
@@ -41,9 +42,9 @@ describe('setup()', function() {
             const imageRequest = new ImageRequest();
             await imageRequest.setup(event);
             const expectedResult = {
-                requestType: 'Default',
+                requestType: 'Style',
                 bucket: 'validBucket',
-                key: 'validKey',
+                key: path,
                 edits: { grayscale: true },
                 outputFormat: 'jpeg',
                 originalImage: Buffer.from('SampleImageContent\n'),
@@ -52,113 +53,6 @@ describe('setup()', function() {
             }
             // Assert
             assert.deepEqual(imageRequest, expectedResult);
-        });
-    });
-    describe('002/thumborImageRequest', function() {
-        it(`Should pass when a thumbor image request is provided and populate
-            the ImageRequest object with the proper values`, async function() {
-            // Arrange
-            const event = {
-                path : "/filters:grayscale()/test-image-001.jpg"
-            }
-            process.env = {
-                SOURCE_BUCKETS : "allowedBucket001, allowedBucket002"
-            }
-            // ----
-            const S3 = require('aws-sdk/clients/s3');
-            const sinon = require('sinon');
-            const getObject = S3.prototype.getObject = sinon.stub();
-            getObject.withArgs({Bucket: 'allowedBucket001', Key: 'test-image-001.jpg'}).returns({
-                promise: () => { return {
-                    Body: Buffer.from('SampleImageContent\n')
-                }}
-            })
-            // Act
-            const imageRequest = new ImageRequest();
-            await imageRequest.setup(event);
-            const expectedResult = {
-                requestType: 'Thumbor',
-                bucket: 'allowedBucket001',
-                key: 'test-image-001.jpg',
-                edits: { grayscale: true },
-                originalImage: Buffer.from('SampleImageContent\n'),
-                CacheControl: 'max-age=31536000,public',
-                ContentType: 'image'
-            }
-            // Assert
-            assert.deepEqual(imageRequest, expectedResult);
-        });
-    });
-    describe('003/customImageRequest', function() {
-        it(`Should pass when a custom image request is provided and populate
-            the ImageRequest object with the proper values`, async function() {
-            // Arrange
-            const event = {
-                path : '/filters-rotate(90)/filters-grayscale()/custom-image.jpg'
-            }
-            process.env = {
-                SOURCE_BUCKETS : "allowedBucket001, allowedBucket002",
-                REWRITE_MATCH_PATTERN: /(filters-)/gm,
-                REWRITE_SUBSTITUTION: 'filters:'
-            }
-            // ----
-            const S3 = require('aws-sdk/clients/s3');
-            const sinon = require('sinon');
-            const getObject = S3.prototype.getObject = sinon.stub();
-            getObject.withArgs({Bucket: 'allowedBucket001', Key: 'custom-image.jpg'}).returns({
-                promise: () => { return {
-                  CacheControl: 'max-age=300,public',
-                  ContentType: 'custom-type',
-                  Expires: 'Tue, 24 Dec 2019 13:46:28 GMT',
-                  LastModified: 'Sat, 19 Dec 2009 16:30:47 GMT',
-                  Body: Buffer.from('SampleImageContent\n')
-                }}
-            })
-            // Act
-            const imageRequest = new ImageRequest();
-            await imageRequest.setup(event);
-            const expectedResult = {
-                requestType: 'Custom',
-                bucket: 'allowedBucket001',
-                key: 'custom-image.jpg',
-                edits: {
-                    grayscale: true,
-                    rotate: 90
-                },
-                originalImage: Buffer.from('SampleImageContent\n'),
-                CacheControl: 'max-age=300,public',
-                ContentType: 'custom-type',
-                Expires: 'Tue, 24 Dec 2019 13:46:28 GMT',
-                LastModified: 'Sat, 19 Dec 2009 16:30:47 GMT',
-            }
-            // Assert
-            assert.deepEqual(imageRequest, expectedResult);
-        });
-    });
-    describe('004/errorCase', function() {
-        it(`Should pass when an error is caught`, async function() {
-            // Assert
-            const event = {
-                path : '/eyJidWNrZXQiOiJ2YWxpZEJ1Y2tldCIsImtleSI6InZhbGlkS2V5IiwiZWRpdHMiOnsiZ3JheXNjYWxlIjp0cnVlfX0='
-            }
-            // ----
-            const S3 = require('aws-sdk/clients/s3');
-            const sinon = require('sinon');
-            const getObject = S3.prototype.getObject = sinon.stub();
-            getObject.withArgs({Bucket: 'validBucket', Key: 'validKey'}).returns({
-                promise: () => { return {
-                    Body: Buffer.from('SampleImageContent\n')
-                }}
-            })
-            // Act
-            const imageRequest = new ImageRequest();
-            // Assert
-            await imageRequest.setup(event).then(() => {
-                console.log(data);
-            }).catch((err) => {
-                console.log(err);
-                assert.deepEqual(err.code, 'ImageBucket::CannotAccessBucket');
-            })
         });
     });
 });
@@ -516,69 +410,17 @@ describe('parseRequestType()', function() {
     describe('001/defaultRequestType', function() {
         it(`Should pass if the method detects a default request`, function() {
             // Arrange
+            const path = '/aws_sv/pictures/original/202004/536870967/00C610795A694E0A906823335D889AC3.jpg'
             const event = {
-                path: '/eyJidWNrZXQiOiJteS1zYW1wbGUtYnVja2V0Iiwia2V5IjoibXktc2FtcGxlLWtleSIsImVkaXRzIjp7ImdyYXlzY2FsZSI6dHJ1ZX19'
+                path : path + '!style'
             }
             process.env = {};
             // Act
             const imageRequest = new ImageRequest();
             const result = imageRequest.parseRequestType(event);
             // Assert
-            const expectedResult = 'Default';
+            const expectedResult = 'Style';
             assert.deepEqual(result, expectedResult);
-        });
-    });
-    describe('002/thumborRequestType', function() {
-        it(`Should pass if the method detects a thumbor request`, function() {
-            // Arrange
-            const event = {
-                path: '/unsafe/filters:brightness(10):contrast(30)/https://upload.wikimedia.org/wikipedia/commons/thumb/7/79/Coffee_berries_1.jpg/1200px-Coffee_berries_1.jpg'
-            }
-            process.env = {};
-            // Act
-            const imageRequest = new ImageRequest();
-            const result = imageRequest.parseRequestType(event);
-            // Assert
-            const expectedResult = 'Thumbor';
-            assert.deepEqual(result, expectedResult);
-        });
-    });
-    describe('003/customRequestType', function() {
-        it(`Should pass if the method detects a custom request`, function() {
-            // Arrange
-            const event = {
-                path: '/additionalImageRequestParameters/image.jpg'
-            }
-            process.env = {
-                REWRITE_MATCH_PATTERN: 'matchPattern',
-                REWRITE_SUBSTITUTION: 'substitutionString'
-            }
-            // Act
-            const imageRequest = new ImageRequest();
-            const result = imageRequest.parseRequestType(event);
-            // Assert
-            const expectedResult = 'Custom';
-            assert.deepEqual(result, expectedResult);
-        });
-    });
-    describe('004/elseCondition', function() {
-        it(`Should throw an error if the method cannot determine the request
-            type based on the three groups given`, function() {
-            // Arrange
-            const event = {
-                path : '12x12e24d234r2ewxsad123d34r'
-            }
-            process.env = {};
-            // Act
-            const imageRequest = new ImageRequest();
-            // Assert
-            assert.throws(function() {
-                const a = imageRequest.parseRequestType(event);
-            }, Object, {
-                status: 400,
-                code: 'RequestType::CannotDetermineRequestType',
-                message: 'The type of request you are making could not be properly routed. Please check your request syntax and refer to the documentation for additional guidance.'
-            });
         });
     });
 });

@@ -10,6 +10,7 @@ class StyleMapping {
      */
     process(event) {
         this.edits.grayscale = true;
+        this.edits.toFormat = 'jpeg';
     }
 
 }
