@@ -28,7 +28,7 @@ describe('setup()', function() {
             }
             process.env = {
                 SOURCE_BUCKETS : "validBucket, validBucket2",
-                STYLE_2XLARGE : 'image/resize,m_lfit,w_720,limit_1/auto-orient,1/quality,Q_80'
+                STYLE_2XLARGE : 'image/resize,m_lfit,w_720,limit_1/auto-orient,1/blur,r_50,s_30/quality,Q_60/format,png'
             }
             // ----
             const S3 = require('aws-sdk/clients/s3');
@@ -50,12 +50,17 @@ describe('setup()', function() {
                     resize: {
                         fit: 'inside', width: 720, withoutEnlargement: true
                     },
-                    rotate: null
+                    jpeg: {
+                        quality: 60,
+                        force: false
+                    },
+                    rotate: null,
+                    blur: 26
                 },
-                outputFormat: 'jpeg',
+                outputFormat: 'png',
                 originalImage: Buffer.from('SampleImageContent\n'),
                 CacheControl: 'max-age=31536000,public',
-                ContentType: 'image/jpeg'
+                ContentType: 'image/png'
             }
             // Assert
             assert.deepEqual(imageRequest, expectedResult);

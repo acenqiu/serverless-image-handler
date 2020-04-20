@@ -33,6 +33,9 @@ class StyleMapping {
                 case 'blur':
                     this.parseBlur(args);
                     break;
+                case 'format':
+                    this.parseFormat(args);
+                    break;
                 case 'quality':
                     this.parseQuality(args);
                     break;
@@ -40,8 +43,6 @@ class StyleMapping {
                     break;
             }
         });
-
-        this.edits.toFormat = 'jpeg';
 
         console.log(this.edits);
     }
@@ -72,11 +73,26 @@ class StyleMapping {
     
     parseBlur(args) {
         this.edits.blur = null;
+
+        args.forEach(arg => {
+            if (arg.startsWith('r_')) {
+                this.edits.blur = 1 + parseFloat(arg.replace('r_', '')) / 2;
+            }
+        });
     }
 
     // https://help.aliyun.com/document_detail/44705.html?spm=a2c4g.11186623.2.15.7aa551b05grBvA#concept-exc-qp5-vdb
     parseQuality(args) {
+        if (args.length > 0) {
+            this.edits.jpeg = {
+                quality: parseInt(args[0].toLowerCase().replace('q_', '')),
+                force: false
+            }
+        }
+    }
 
+    parseFormat(args) {
+        this.edits.toFormat = args[0];
     }
 
 }
