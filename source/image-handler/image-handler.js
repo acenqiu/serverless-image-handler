@@ -121,8 +121,10 @@ class ImageHandler {
                         message: 'The padding value you provided exceeds the boundaries of the original image. Please try choosing a smaller value or applying padding via Sharp for greater specificity.'
                     });
                 }
-            } else {
+            } else if (value != null) {
                 image[key](value);
+            } else {
+                image[key]();
             }
         }
         // Return the modified image

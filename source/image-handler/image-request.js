@@ -196,7 +196,7 @@ class ImageRequest {
         }
 
         if (requestType === "Style")  {
-            return event["path"].replace(/!([\w_-]+)/, '');
+            return event["path"].replace(/!([\w_-]+)/, '').replace(/^\/+/, '');
         }
 
         // Return an error for all other conditions

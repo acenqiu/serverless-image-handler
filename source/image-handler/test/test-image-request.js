@@ -22,9 +22,9 @@ describe('setup()', function() {
         it(`Should pass when a default image request is provided and populate
             the ImageRequest object with the proper values`, async function() {
             // Arrange
-            const path = '/aws_sv/pictures/original/202004/536870967/00C610795A694E0A906823335D889AC3.jpg'
+            const key = 'aws_sv/pictures/original/202004/536870967/00C610795A694E0A906823335D889AC3.jpg'
             const event = {
-                path : path + '!style'
+                path : '/' + key + '!style'
             }
             process.env = {
                 SOURCE_BUCKETS : "validBucket, validBucket2"
@@ -33,7 +33,7 @@ describe('setup()', function() {
             const S3 = require('aws-sdk/clients/s3');
             const sinon = require('sinon');
             const getObject = S3.prototype.getObject = sinon.stub();
-            getObject.withArgs({Bucket: 'validBucket', Key: path}).returns({
+            getObject.withArgs({Bucket: 'validBucket', Key: key}).returns({
                 promise: () => { return {
                     Body: Buffer.from('SampleImageContent\n')
                 }}
@@ -44,8 +44,13 @@ describe('setup()', function() {
             const expectedResult = {
                 requestType: 'Style',
                 bucket: 'validBucket',
-                key: path,
-                edits: { grayscale: true },
+                key,
+                edits: {
+                    resize: {
+                        options: { fit: 'outside', width: 640, height: 640, withoutEnlargement: false }
+                    },
+                    rotate: null
+                },
                 outputFormat: 'jpeg',
                 originalImage: Buffer.from('SampleImageContent\n'),
                 CacheControl: 'max-age=31536000,public',
