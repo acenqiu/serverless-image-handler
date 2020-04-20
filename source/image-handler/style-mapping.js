@@ -18,8 +18,8 @@ class StyleMapping {
         }
 
         const style = matched[1];
-        const mapping = process.env.STYLE_MAPPING || {};
-        const styleDefine = mapping[style] || 'image/resize,m_mfit,w_640,h_640,limit_0/auto-orient,1/quality,q_80';
+        const styleDefault = 'image/resize,m_mfit,w_640,h_640,limit_0/auto-orient,1/quality,q_80';
+        const styleDefine = process.env['STYLE_' + style.toUpperCase()] || styleDefault;
         const pipelines = styleDefine.split('/');
         pipelines.forEach(pipeline => {
             const [ feature, ...args ] = pipeline.split(',');
@@ -42,6 +42,8 @@ class StyleMapping {
         });
 
         this.edits.toFormat = 'jpeg';
+
+        console.log(this.edits);
     }
 
     parseResize(args) {
@@ -61,7 +63,7 @@ class StyleMapping {
             }
         });
 
-        this.edits.resize = { options };
+        this.edits.resize = options;
     }
 
     parseAutoOrient(args) {

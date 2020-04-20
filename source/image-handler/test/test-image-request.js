@@ -24,10 +24,11 @@ describe('setup()', function() {
             // Arrange
             const key = 'aws_sv/pictures/original/202004/536870967/00C610795A694E0A906823335D889AC3.jpg'
             const event = {
-                path : '/' + key + '!style'
+                path : '/' + key + '!2xlarge'
             }
             process.env = {
-                SOURCE_BUCKETS : "validBucket, validBucket2"
+                SOURCE_BUCKETS : "validBucket, validBucket2",
+                STYLE_2XLARGE : 'image/resize,m_lfit,w_720,limit_1/auto-orient,1/quality,Q_80'
             }
             // ----
             const S3 = require('aws-sdk/clients/s3');
@@ -47,7 +48,7 @@ describe('setup()', function() {
                 key,
                 edits: {
                     resize: {
-                        options: { fit: 'outside', width: 640, height: 640, withoutEnlargement: false }
+                        fit: 'inside', width: 720, withoutEnlargement: true
                     },
                     rotate: null
                 },
