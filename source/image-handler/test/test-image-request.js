@@ -66,6 +66,93 @@ describe('setup()', function() {
             assert.deepEqual(imageRequest, expectedResult);
         });
     });
+
+    describe('002/imageRequestWithoutStyle', function() {
+        it(`Should pass when a default image request is provided and no edits needed`, async function() {
+            // Arrange
+            const key = 'aws_sv/pictures/original/202004/536870967/00C610795A694E0A906823335D889AC3.jpg'
+            const event = {
+                path : '/' + key
+            }
+            process.env = {
+                SOURCE_BUCKETS : "validBucket, validBucket2"
+            }
+            // ----
+            const S3 = require('aws-sdk/clients/s3');
+            const sinon = require('sinon');
+            const getObject = S3.prototype.getObject = sinon.stub();
+            getObject.withArgs({Bucket: 'validBucket', Key: key}).returns({
+                promise: () => { return {
+                    Body: Buffer.from('SampleImageContent\n'),
+                    ContentType: 'image/png'
+                }}
+            })
+            // Act
+            const imageRequest = new ImageRequest();
+            await imageRequest.setup(event);
+            const expectedResult = {
+                requestType: 'Style',
+                bucket: 'validBucket',
+                key,
+                edits: undefined,
+                originalImage: Buffer.from('SampleImageContent\n'),
+                CacheControl: 'max-age=31536000,public',
+                ContentType: 'image/png'
+            }
+            // Assert
+            assert.deepEqual(imageRequest, expectedResult);
+        });
+    });
+
+    describe('003/imageRequestWithWebp', function() {
+        it(`Should pass when a default image request is provided and populate
+            the ImageRequest object with the proper values`, async function() {
+            // Arrange
+            const key = 'aws_sv/pictures/original/202004/536870967/00C610795A694E0A906823335D889AC3.jpg'
+            const event = {
+                path : '/' + key + '!2xlarge_webp'
+            }
+            process.env = {
+                SOURCE_BUCKETS : "validBucket, validBucket2",
+                STYLE_2XLARGE : 'image/resize,m_lfit,w_720,limit_1/auto-orient,1/blur,r_50,s_30/quality,Q_60'
+            }
+            // ----
+            const S3 = require('aws-sdk/clients/s3');
+            const sinon = require('sinon');
+            const getObject = S3.prototype.getObject = sinon.stub();
+            getObject.withArgs({Bucket: 'validBucket', Key: key}).returns({
+                promise: () => { return {
+                    Body: Buffer.from('SampleImageContent\n'),
+                    ContentType: 'image/jpeg'
+                }}
+            })
+            // Act
+            const imageRequest = new ImageRequest();
+            await imageRequest.setup(event);
+            const expectedResult = {
+                requestType: 'Style',
+                bucket: 'validBucket',
+                key,
+                edits: {
+                    resize: {
+                        fit: 'inside', width: 720, withoutEnlargement: true
+                    },
+                    jpeg: {
+                        quality: 60,
+                        force: false
+                    },
+                    rotate: null,
+                    blur: 26
+                },
+                outputFormat: 'webp',
+                originalImage: Buffer.from('SampleImageContent\n'),
+                CacheControl: 'max-age=31536000,public',
+                ContentType: 'image/webp'
+            }
+            // Assert
+            assert.deepEqual(imageRequest, expectedResult);
+        });
+    });
 });
 // ----------------------------------------------------------------------------
 // getOriginalImage()

@@ -276,6 +276,8 @@ class ImageRequest {
         const autoWebP = process.env.AUTO_WEBP;
         if (autoWebP && event.headers.Accept && event.headers.Accept.includes('image/webp')) {
             return 'webp';
+        } else if (this.requestType === 'Style' && event.path.endsWith('_webp')) {
+            return 'webp';
         } else if (this.requestType === 'Default') {
             const decoded = this.decodeRequest(event);
             return decoded.outputFormat;

@@ -13,11 +13,11 @@ class StyleMapping {
 
         const matched = path.match(/!([\w_-]+)/);
         if (matched == null) {
-            this.edits = null;
+            this.edits = undefined;
             return;
         }
 
-        const style = matched[1];
+        const style = matched[1].replace('_webp', '');
         const styleDefault = 'image/resize,m_mfit,w_640,h_640,limit_0/auto-orient,1/quality,q_80';
         const styleDefine = process.env['STYLE_' + style.toUpperCase()] || styleDefault;
         const pipelines = styleDefine.split('/');
