@@ -1,20 +1,14 @@
-/*********************************************************************************************************************
- *  Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.                                           *
- *                                                                                                                    *
- *  Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance    *
- *  with the License. A copy of the License is located at                                                             *
- *                                                                                                                    *
- *      http://www.apache.org/licenses/LICENSE-2.0                                                                    *
- *                                                                                                                    *
- *  or in the 'license' file accompanying this file. This file is distributed on an 'AS IS' BASIS, WITHOUT WARRANTIES *
- *  OR CONDITIONS OF ANY KIND, express or implied. See the License for the specific language governing permissions    *
- *  and limitations under the License.                                                                                *
- *********************************************************************************************************************/
+// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
 
 const StyleMapping = require('./style-mapping');
 const ThumborMapping = require('./thumbor-mapping');
 
 class ImageRequest {
+    constructor(s3, secretsManager) {
+        this.s3 = s3;
+        this.secretsManager = secretsManager;
+    }
 
     /**
      * Initializer function for creating a new image request, used by the image
@@ -23,25 +17,78 @@ class ImageRequest {
      */
     async setup(event) {
         try {
+            // Checks signature enabled
+            if (process.env.ENABLE_SIGNATURE === 'Yes') {
+                const crypto = require('crypto');
+                const { path, queryStringParameters } = event;
+                if (!queryStringParameters || !queryStringParameters.signature) {
+                    throw {
+                        status: 400,
+                        message: 'Query-string requires the signature parameter.',
+                        code: 'AuthorizationQueryParametersError'
+                    };
+                }
+
+                const { signature } = queryStringParameters;
+                try {
+                    const response = await this.secretsManager.getSecretValue({ SecretId: process.env.SECRETS_MANAGER }).promise();
+                    const secretString = JSON.parse(response.SecretString);
+                    const hash = crypto.createHmac('sha256', secretString[process.env.SECRET_KEY]).update(path).digest('hex');
+
+                    // Signature should be made with the full path.
+                    if (signature !== hash) {
+                        throw {
+                            status: 403,
+                            message: 'Signature does not match.',
+                            code: 'SignatureDoesNotMatch'
+                        };
+                    }
+                } catch (error) {
+                    if (error.code === 'SignatureDoesNotMatch') {
+                        throw error;
+                    }
+
+                    console.error('Error occurred while checking signature.', error);
+                    throw {
+                        status: 500,
+                        message: 'Signature validation failed.',
+                        code: 'SignatureValidationFailure'
+                    };
+                }
+            }
+
             this.requestType = this.parseRequestType(event);
             this.bucket = this.parseImageBucket(event, this.requestType);
             this.key = this.parseImageKey(event, this.requestType);
             this.edits = this.parseImageEdits(event, this.requestType);
             this.originalImage = await this.getOriginalImage(this.bucket, this.key);
+            this.headers = this.parseImageHeaders(event, this.requestType);
+
+            if (!this.headers) {
+                delete this.headers;
+            }
+
+            // If the original image is SVG file and it has any edits but no output format, change the format to WebP.
+            if (this.ContentType === 'image/svg+xml'
+                && this.edits && Object.keys(this.edits).length > 0
+                && !this.edits.toFormat) {
+                this.outputFormat = 'png'
+            }
 
             /* Decide the output format of the image.
              * 1) If the format is provided, the output format is the provided format.
              * 2) If headers contain "Accept: image/webp", the output format is webp.
              * 3) Use the default image format for the rest of cases.
              */
-            let outputFormat = this.getOutputFormat(event);
-            if (this.edits && this.edits.toFormat) {
-                this.outputFormat = this.edits.toFormat;
-                delete this.edits.toFormat;
-            } else if (outputFormat) {
-                this.outputFormat = outputFormat;
+            if (this.ContentType !== 'image/svg+xml' || this.edits.toFormat || this.outputFormat) {
+                let outputFormat = this.getOutputFormat(event);
+                if (this.edits && this.edits.toFormat) {
+                    this.outputFormat = this.edits.toFormat;
+                } else if (outputFormat) {
+                    this.outputFormat = outputFormat;
+                }
             }
-
+            
             // Fix quality for Thumbor and Custom request type if outputFormat is different from quality type.
             if (this.outputFormat) {
                 const requestType = ['Custom', 'Thumbor'];
@@ -58,6 +105,9 @@ class ImageRequest {
                 }
             }
 
+            delete this.s3;
+            delete this.secretsManager;
+
             return this;
         } catch (err) {
             console.error(err);
@@ -72,14 +122,18 @@ class ImageRequest {
      * @return {Promise} - The original image or an error.
      */
     async getOriginalImage(bucket, key) {
-        const S3 = require('aws-sdk/clients/s3');
-        const s3 = new S3();
         const imageLocation = { Bucket: bucket, Key: key };
         try {
-            const originalImage = await s3.getObject(imageLocation).promise();
+            const originalImage = await this.s3.getObject(imageLocation).promise();
 
             if (originalImage.ContentType) {
-                this.ContentType = originalImage.ContentType;
+                //If using default s3 ContentType infer from hex headers
+                if(originalImage.ContentType === 'binary/octet-stream') {
+                    const imageBuffer = Buffer.from(originalImage.Body);
+                    this.ContentType = this.inferImageType(imageBuffer);
+                } else {
+                    this.ContentType = originalImage.ContentType;
+                }
             } else {
                 this.ContentType = "image";
             }
@@ -97,7 +151,6 @@ class ImageRequest {
             } else {
                 this.CacheControl = "max-age=31536000,public";
             }
-
             return originalImage.Body;
         } catch(err) {
             throw {
@@ -119,7 +172,7 @@ class ImageRequest {
             // Decode the image request
             const decoded = this.decodeRequest(event);
             if (decoded.bucket !== undefined) {
-                // Check the provided bucket against the whitelist
+                // Check the provided bucket against the allowed list
                 const sourceBuckets = this.getAllowedSourceBuckets();
                 if (sourceBuckets.includes(decoded.bucket) || decoded.bucket.match(new RegExp('^' + sourceBuckets[0] + '$'))) {
                     return decoded.bucket;
@@ -193,7 +246,23 @@ class ImageRequest {
         }
 
         if (requestType === "Thumbor" || requestType === "Custom") {
-            return decodeURIComponent(event["path"].replace(/\d+x\d+\/|filters[:-][^/]+|\/fit-in\/+|^\/+/g,'').replace(/^\/+/,''));
+            let { path } = event;
+
+            if (requestType === "Custom") {
+                const matchPattern = process.env.REWRITE_MATCH_PATTERN;
+                const substitution = process.env.REWRITE_SUBSTITUTION;
+
+                if (typeof(matchPattern) === 'string') {
+                    const patternStrings = matchPattern.split('/');
+                    const flags = patternStrings.pop();
+                    const parsedPatternString = matchPattern.slice(1, matchPattern.length - 1 - flags.length);
+                    const regExp = new RegExp(parsedPatternString, flags);
+                    path = path.replace(regExp, substitution);
+                } else {
+                    path = path.replace(matchPattern, substitution);
+                }
+            }
+            return decodeURIComponent(path.replace(/\/(\d+x\d+)\/|filters:[^\)]+|\/fit-in+|^\/+/g, '').replace(/\)/g, '').replace(/^\/+/, ''));
         }
 
         if (requestType === "Style")  {
@@ -217,6 +286,23 @@ class ImageRequest {
     */
     parseRequestType(event) {
         return "Style";
+    }
+
+    /**
+     * Parses the headers to be sent with the response.
+     * @param {object} event - Lambda request body.
+     * @param {string} requestType - Image handler request type.
+     * @return {object} Custom headers
+     */
+    parseImageHeaders(event, requestType) {
+        if (requestType === 'Default') {
+            const decoded = this.decodeRequest(event);
+            if (decoded.headers) {
+                return decoded.headers;
+            }
+        }
+
+        return undefined;
     }
 
     /**
@@ -285,6 +371,28 @@ class ImageRequest {
 
         return null;
     }
+
+    /**
+    * Return the output format depending on first four hex values of an image file.
+    * @param {Buffer} imageBuffer - Image buffer.
+    */
+   inferImageType(imageBuffer) {
+    switch(imageBuffer.toString('hex').substring(0,8).toUpperCase()) {
+        case '89504E47': return 'image/png';
+        case 'FFD8FFDB': return 'image/jpeg';
+        case 'FFD8FFE0': return 'image/jpeg';
+        case 'FFD8FFEE': return 'image/jpeg';
+        case 'FFD8FFE1': return 'image/jpeg';
+        case '52494646': return 'image/webp';
+        case '49492A00': return 'image/tiff';
+        case '4D4D002A': return 'image/tiff';
+        default: throw {
+            status: 500,
+            code: 'RequestTypeError',
+            message: 'The file does not have an extension and the file type could not be inferred. Please ensure that your original image is of a supported file type (jpg, png, tiff, webp, svg). Refer to the documentation for additional guidance on forming image requests.'
+        };   
+    }
+}
 }
 
 // Exports

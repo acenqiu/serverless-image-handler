@@ -4,7 +4,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [5.0] - 2020-08-31
+## [5.2.0] - 2021-01-29
+### Added
+- Support for ap-east-1 and me-south-1 regions: [#192](https://github.com/awslabs/serverless-image-handler/issues/192), [#228](https://github.com/awslabs/serverless-image-handler/issues/228), [#232](https://github.com/awslabs/serverless-image-handler/issues/232)
+- Unit tests for custom-resource: `100%` coverage
+- Cloudfront cache policy and origin request policy: [#229](https://github.com/awslabs/serverless-image-handler/issues/229)
+- Circular cropping feature: [#214](https://github.com/awslabs/serverless-image-handler/issues/214), [#216](https://github.com/awslabs/serverless-image-handler/issues/216)
+- Unit tests for image-handler: `100%` coverage
+- Support for files without extension on thumbor requests: [#169](https://github.com/awslabs/serverless-image-handler/issues/169), [#188](https://github.com/awslabs/serverless-image-handler/issues/188)
+- Inappropriate content detection feature: [#243](https://github.com/awslabs/serverless-image-handler/issues/243)
+- Unit tests for image-request: `100%` coverage
+
+### Fixed
+- Graceful failure when no faces are detected using smartCrop and fail on resizing before smartCrop: [#132](https://github.com/awslabs/serverless-image-handler/issues/132), [#133](https://github.com/awslabs/serverless-image-handler/issues/133)
+- Broken SVG returned if no edits specified and Auto-WebP enabled: [#247](https://github.com/awslabs/serverless-image-handler/issues/247)
+- Removed "--recursive" from README.md: [#255](https://github.com/awslabs/serverless-image-handler/pull/255)
+- fixed issue with failure on resize if width or height is float: [#254](https://github.com/awslabs/serverless-image-handler/issues/254)
+
+### Changed 
+- Constructs test template for constructs unit test: `100%` coverage
+
+## [5.1.0] - 2020-11-19
+### ⚠ BREAKING CHANGES
+- **Image URL Signature**: When image URL signature is enabled, all URLs including existing URLs should have `signature` query parameter.
+
+### Added
+- Image URL signature: [#111](https://github.com/awslabs/serverless-image-handler/issues/111), [#203](https://github.com/awslabs/serverless-image-handler/issues/203), [#221](https://github.com/awslabs/serverless-image-handler/issues/221), [#227](https://github.com/awslabs/serverless-image-handler/pull/227)
+- AWS Lambda `413` error handling. When the response payload is bigger than 6MB, it throws `TooLargeImageException`: [#35](https://github.com/awslabs/serverless-image-handler/issues/35), [#97](https://github.com/awslabs/serverless-image-handler/issues/97), [#193](https://github.com/awslabs/serverless-image-handler/issues/193), [#204](https://github.com/awslabs/serverless-image-handler/issues/204)
+- Default fallback image: [#137](https://github.com/awslabs/serverless-image-handler/issues/137)
+- Unit tests for custom resource: `100%` coverage
+- Add `SVG` support. When any edits are used, the output would be automatically `PNG` unless the output format is specified: [#31](https://github.com/awslabs/serverless-image-handler/issues/31), [#234](https://github.com/awslabs/serverless-image-handler/issues/234)
+- Custom headers: [#182](https://github.com/awslabs/serverless-image-handler/pull/182)
+- Enabling ALB Support : [#201](https://github.com/awslabs/serverless-image-handler/pull/201)
+
+### Fixed
+- Thumbor paths broken if they include "-" and "100x100": [#208](https://github.com/awslabs/serverless-image-handler/issues/208)
+- Rewrite doesn't seem to be working: [#121](https://github.com/awslabs/serverless-image-handler/issues/121)
+- Correct EXIF: [#197](https://github.com/awslabs/serverless-image-handler/issues/197), [#220](https://github.com/awslabs/serverless-image-handler/issues/220), [#235](https://github.com/awslabs/serverless-image-handler/issues/235), [#236](https://github.com/awslabs/serverless-image-handler/issues/236), [#240](https://github.com/awslabs/serverless-image-handler/issues/240)
+- Sub folder support in Thumbor `watermark` filter: [#231](https://github.com/awslabs/serverless-image-handler/issues/231)
+
+### Changed
+- AWS CDK and AWS Solutions Constructs version (from 1.57.0 to 1.64.1)
+- sharp base version (from 0.25.4 to 0.26.1)
+- Refactors the custom resource Lambda source code
+- Migrate unit tests to use `jest`
+- Move all `aws-sdk` in `ImageHandler` Labmda function to `index.js` for the best practice
+- Enhance the default error message not to show empty JSON: [#206](https://github.com/awslabs/serverless-image-handler/issues/206)
+
+### Removed
+- Remove `manifest-generator`
+
+## [5.0.0] - 2020-08-31
 ### Added
 - AWS CDK and AWS Solutions Constructs to create AWS CloudFormation template
 

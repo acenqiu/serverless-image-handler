@@ -36,6 +36,34 @@
           "Parameters": [
             "LogRetentionPeriod"
           ]
+        },
+        {
+          "Label": {
+            "default": "Image URL Signature (Note: Enabling signature is not compatible with previous image URLs, which could result in broken image links. Please refer to the implementation guide for details: https://docs.aws.amazon.com/solutions/latest/serverless-image-handler/considerations.html)"
+          },
+          "Parameters": [
+            "EnableSignature",
+            "SecretsManagerSecret",
+            "SecretsManagerKey"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Default Fallback Image (Note: Enabling default fallback image returns the default fallback image instead of JSON object when error happens. Please refer to the implementation guide for details: https://docs.aws.amazon.com/solutions/latest/serverless-image-handler/considerations.html)"
+          },
+          "Parameters": [
+            "EnableDefaultFallbackImage",
+            "FallbackImageS3Bucket",
+            "FallbackImageS3Key"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Auto WebP"
+          },
+          "Parameters": [
+            "AutoWebP"
+          ]
         }
       ]
     }
@@ -102,6 +130,44 @@
         "No"
       ],
       "Description": "Would you like to enable automatic WebP based on accept headers? Select 'Yes' if so."
+    },
+    "EnableSignature": {
+      "Type": "String",
+      "Default": "No",
+      "AllowedValues": [
+        "Yes",
+        "No"
+      ],
+      "Description": "Would you like to enable the signature? If so, select 'Yes' and provide SecretsManagerSecret and SecretsManagerKey values."
+    },
+    "SecretsManagerSecret": {
+      "Type": "String",
+      "Default": "",
+      "Description": "The name of AWS Secrets Manager secret. You need to create your secret under this name."
+    },
+    "SecretsManagerKey": {
+      "Type": "String",
+      "Default": "",
+      "Description": "The name of AWS Secrets Manager secret key. You need to create secret key with this key name. The secret value would be used to check signature."
+    },
+    "EnableDefaultFallbackImage": {
+      "Type": "String",
+      "Default": "No",
+      "AllowedValues": [
+        "Yes",
+        "No"
+      ],
+      "Description": "Would you like to enable the default fallback image? If so, select 'Yes' and provide FallbackImageS3Bucket and FallbackImageS3Key values."
+    },
+    "FallbackImageS3Bucket": {
+      "Type": "String",
+      "Default": "",
+      "Description": "The name of the Amazon S3 bucket which contains the default fallback image. e.g. my-fallback-image-bucket"
+    },
+    "FallbackImageS3Key": {
+      "Type": "String",
+      "Default": "",
+      "Description": "The name of the default fallback image object key including prefix. e.g. prefix/image.jpg"
     }
   },
   "Mappings": {
@@ -126,6 +192,65 @@
           "Ref": "CorsEnabled"
         },
         "Yes"
+      ]
+    },
+    "EnableSignatureCondition": {
+      "Fn::Equals": [
+        {
+          "Ref": "EnableSignature"
+        },
+        "Yes"
+      ]
+    },
+    "EnableDefaultFallbackImageCondition": {
+      "Fn::Equals": [
+        {
+          "Ref": "EnableDefaultFallbackImage"
+        },
+        "Yes"
+      ]
+    },
+    "IsOptInRegion": {
+      "Fn::Or": [
+        {
+          "Fn::Equals": [
+            "af-south-1",
+            {
+              "Ref": "AWS::Region"
+            }
+          ]
+        },
+        {
+          "Fn::Equals": [
+            "ap-east-1",
+            {
+              "Ref": "AWS::Region"
+            }
+          ]
+        },
+        {
+          "Fn::Equals": [
+            "eu-south-1",
+            {
+              "Ref": "AWS::Region"
+            }
+          ]
+        },
+        {
+          "Fn::Equals": [
+            "me-south-1",
+            {
+              "Ref": "AWS::Region"
+            }
+          ]
+        }
+      ]
+    },
+    "IsNotOptInRegion": {
+      "Fn::Not": [
+        {
+          "Condition": "IsOptInRegion"
+        }
       ]
     }
   },
@@ -226,7 +351,10 @@
               }
             },
             {
-              "Action": "rekognition:DetectFaces",
+              "Action": [
+                "rekognition:DetectFaces",
+                "rekognition:DetectModerationLabels"
+              ],
               "Effect": "Allow",
               "Resource": "*"
             }
@@ -266,38 +394,14 @@
       "Properties": {
         "Code": {
           "S3Bucket": {
-            "Fn::Select": [
-              0,
-              {
-                "Fn::Split": [
-                  "/",
-                  {
-                    "Fn::Select": [
-                      5,
-                      {
-                        "Fn::Split": [
-                          ":",
-                          {
-                            "Fn::Join": [
-                              "",
-                              [
-                                "arn:",
-                                {
-                                  "Ref": "AWS::Partition"
-                                },
-                                ":s3:::TEST-",
-                                {
-                                  "Ref": "AWS::Region"
-                                }
-                              ]
-                            ]
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                ]
-              }
+            "Fn::Join": [
+              "",
+              [
+                "TEST-",
+                {
+                  "Ref": "AWS::Region"
+                }
+              ]
             ]
           },
           "S3Key": "serverless-image-handler/TEST_VERSION/image-handler.zip"
@@ -326,10 +430,28 @@
               "Ref": "SourceBuckets"
             },
             "REWRITE_MATCH_PATTERN": "",
-            "REWRITE_SUBSTITUTION": ""
+            "REWRITE_SUBSTITUTION": "",
+            "ENABLE_SIGNATURE": {
+              "Ref": "EnableSignature"
+            },
+            "SECRETS_MANAGER": {
+              "Ref": "SecretsManagerSecret"
+            },
+            "SECRET_KEY": {
+              "Ref": "SecretsManagerKey"
+            },
+            "ENABLE_DEFAULT_FALLBACK_IMAGE": {
+              "Ref": "EnableDefaultFallbackImage"
+            },
+            "DEFAULT_FALLBACK_IMAGE_BUCKET": {
+              "Ref": "FallbackImageS3Bucket"
+            },
+            "DEFAULT_FALLBACK_IMAGE_KEY": {
+              "Ref": "FallbackImageS3Key"
+            }
           }
         },
-        "MemorySize": 256,
+        "MemorySize": 1024,
         "Timeout": 30
       },
       "DependsOn": [
@@ -402,12 +524,36 @@
         }
       },
       "UpdateReplacePolicy": "Retain",
-      "DeletionPolicy": "Retain"
+      "DeletionPolicy": "Retain",
+      "Metadata": {
+        "cfn_nag": {
+          "rules_to_suppress": [
+            {
+              "id": "W84",
+              "reason": "Used to store store function info"
+            }
+          ]
+        }
+      }
     },
     "ApiLogs": {
       "Type": "AWS::Logs::LogGroup",
       "UpdateReplacePolicy": "Retain",
-      "DeletionPolicy": "Retain"
+      "DeletionPolicy": "Retain",
+      "Metadata": {
+        "cfn_nag": {
+          "rules_to_suppress": [
+            {
+              "id": "W84",
+              "reason": "Used to store store api log info, not using kms"
+            },
+            {
+              "id": "W86",
+              "reason": "Log retention specified in CloudFromation parameters."
+            }
+          ]
+        }
+      }
     },
     "ImageHandlerApi": {
       "Type": "AWS::ApiGateway::RestApi",
@@ -432,6 +578,13 @@
                     "name": "proxy",
                     "in": "path",
                     "required": true,
+                    "type": "string"
+                  },
+                  {
+                    "name": "signature",
+                    "in": "query",
+                    "description": "Signature of the image",
+                    "required": false,
                     "type": "string"
                   }
                 ],
@@ -520,7 +673,11 @@
                     "Fn::Join": [
                       "",
                       [
-                        "arn:aws:logs:",
+                        "arn:",
+                        {
+                          "Ref": "AWS::Partition"
+                        },
+                        ":logs:",
                         {
                           "Ref": "AWS::Region"
                         },
@@ -573,9 +730,6 @@
           "BlockPublicPolicy": true,
           "IgnorePublicAcls": true,
           "RestrictPublicBuckets": true
-        },
-        "VersioningConfiguration": {
-          "Status": "Enabled"
         }
       },
       "UpdateReplacePolicy": "Retain",
@@ -589,7 +743,8 @@
             }
           ]
         }
-      }
+      },
+      "Condition": "IsNotOptInRegion"
     },
     "LogsBucketPolicy": {
       "Type": "AWS::S3::BucketPolicy",
@@ -627,7 +782,8 @@
           ],
           "Version": "2012-10-17"
         }
-      }
+      },
+      "Condition": "IsNotOptInRegion"
     },
     "ImageHandlerDistribution": {
       "Type": "AWS::CloudFront::Distribution",
@@ -661,15 +817,11 @@
               "GET",
               "HEAD"
             ],
-            "ForwardedValues": {
-              "Cookies": {
-                "Forward": "none"
-              },
-              "Headers": [
-                "Origin",
-                "Accept"
-              ],
-              "QueryString": false
+            "CachePolicyId": {
+              "Ref": "ImageHandlerCachePolicy"
+            },
+            "OriginRequestPolicyId": {
+              "Ref": "ImageHandlerOriginRequestPolicy"
             },
             "TargetOriginId": {
               "Ref": "ImageHandlerApi"
@@ -680,9 +832,31 @@
           "HttpVersion": "http2",
           "Logging": {
             "Bucket": {
-              "Fn::GetAtt": [
-                "Logs",
-                "DomainName"
+              "Fn::If": [
+                "IsOptInRegion",
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "CustomCFLoggingBucket",
+                          "bucketName"
+                        ]
+                      },
+                      ".s3.us-east-1.",
+                      {
+                        "Ref": "AWS::URLSuffix"
+                      }
+                    ]
+                  ]
+                },
+                {
+                  "Fn::GetAtt": [
+                    "Logs",
+                    "RegionalDomainName"
+                  ]
+                }
               ]
             },
             "IncludeCookies": false,
@@ -763,6 +937,88 @@
               "reason": "The solution does not require the usage plan."
             }
           ]
+        }
+      }
+    },
+    "ImageHandlerCachePolicy": {
+      "Type": "AWS::CloudFront::CachePolicy",
+      "Properties": {
+        "CachePolicyConfig": {
+          "DefaultTTL": 86400,
+          "MaxTTL": 31536000,
+          "MinTTL": 1,
+          "Name": {
+            "Fn::Join": [
+              "",
+              [
+                {
+                  "Ref": "AWS::StackName"
+                },
+                "-",
+                {
+                  "Ref": "AWS::Region"
+                },
+                "-ImageHandlerCachePolicy"
+              ]
+            ]
+          },
+          "ParametersInCacheKeyAndForwardedToOrigin": {
+            "CookiesConfig": {
+              "CookieBehavior": "none"
+            },
+            "EnableAcceptEncodingGzip": true,
+            "HeadersConfig": {
+              "HeaderBehavior": "whitelist",
+              "Headers": [
+                "origin",
+                "accept"
+              ]
+            },
+            "QueryStringsConfig": {
+              "QueryStringBehavior": "whitelist",
+              "QueryStrings": [
+                "signature"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "ImageHandlerOriginRequestPolicy": {
+      "Type": "AWS::CloudFront::OriginRequestPolicy",
+      "Properties": {
+        "OriginRequestPolicyConfig": {
+          "CookiesConfig": {
+            "CookieBehavior": "none"
+          },
+          "HeadersConfig": {
+            "HeaderBehavior": "whitelist",
+            "Headers": [
+              "origin",
+              "accept"
+            ]
+          },
+          "Name": {
+            "Fn::Join": [
+              "",
+              [
+                {
+                  "Ref": "AWS::StackName"
+                },
+                "-",
+                {
+                  "Ref": "AWS::Region"
+                },
+                "-ImageHandlerOriginRequestPolicy"
+              ]
+            ]
+          },
+          "QueryStringsConfig": {
+            "QueryStringBehavior": "whitelist",
+            "QueryStrings": [
+              "signature"
+            ]
+          }
         }
       }
     },
@@ -889,9 +1145,31 @@
           "IPV6Enabled": true,
           "Logging": {
             "Bucket": {
-              "Fn::GetAtt": [
-                "Logs",
-                "DomainName"
+              "Fn::If": [
+                "IsOptInRegion",
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "CustomCFLoggingBucket",
+                          "bucketName"
+                        ]
+                      },
+                      ".s3.us-east-1.",
+                      {
+                        "Ref": "AWS::URLSuffix"
+                      }
+                    ]
+                  ]
+                },
+                {
+                  "Fn::GetAtt": [
+                    "Logs",
+                    "RegionalDomainName"
+                  ]
+                }
               ]
             },
             "IncludeCookies": false,
@@ -1015,6 +1293,10 @@
             },
             {
               "Action": [
+                "s3:putBucketAcl",
+                "s3:putEncryptionConfiguration",
+                "s3:putBucketPolicy",
+                "s3:CreateBucket",                
                 "s3:GetObject",
                 "s3:PutObject",
                 "s3:ListBucket"
@@ -1059,38 +1341,14 @@
       "Properties": {
         "Code": {
           "S3Bucket": {
-            "Fn::Select": [
-              0,
-              {
-                "Fn::Split": [
-                  "/",
-                  {
-                    "Fn::Select": [
-                      5,
-                      {
-                        "Fn::Split": [
-                          ":",
-                          {
-                            "Fn::Join": [
-                              "",
-                              [
-                                "arn:",
-                                {
-                                  "Ref": "AWS::Partition"
-                                },
-                                ":s3:::TEST-",
-                                {
-                                  "Ref": "AWS::Region"
-                                }
-                              ]
-                            ]
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                ]
-              }
+            "Fn::Join": [
+              "",
+              [
+                "TEST-",
+                {
+                  "Ref": "AWS::Region"
+                }
+              ]
             ]
           },
           "S3Key": "serverless-image-handler/TEST_VERSION/custom-resource.zip"
@@ -1104,8 +1362,13 @@
         },
         "Runtime": "nodejs12.x",
         "Description": "Serverless Image Handler - Custom resource",
+        "Environment": {
+          "Variables": {
+            "RETRY_SECONDS": "5"
+          }
+        },
         "MemorySize": 128,
-        "Timeout": 30
+        "Timeout": 60
       },
       "DependsOn": [
         "CustomResourceRole"
@@ -1140,7 +1403,17 @@
         }
       },
       "UpdateReplacePolicy": "Retain",
-      "DeletionPolicy": "Retain"
+      "DeletionPolicy": "Retain",
+      "Metadata": {
+        "cfn_nag": {
+          "rules_to_suppress": [
+            {
+              "id": "W84",
+              "reason": "Used to store store function info, no kms used"
+            }
+          ]
+        }
+      }
     },
     "CustomResourceCopyS3": {
       "Type": "Custom::CustomResource",
@@ -1265,6 +1538,12 @@
             "Data"
           ]
         },
+        "enableSignature": {
+          "Ref": "EnableSignature"
+        },
+        "enableDefaultFallbackImage": {
+          "Ref": "EnableDefaultFallbackImage"
+        },
         "customAction": "sendMetric"
       },
       "DependsOn": [
@@ -1293,6 +1572,149 @@
         "CustomResourcePolicy",
         "CustomResourceRole"
       ]
+    },
+    "SecretsManagerPolicy": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "secretsmanager:GetSecretValue",
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:",
+                    {
+                      "Ref": "AWS::Partition"
+                    },
+                    ":secretsmanager:",
+                    {
+                      "Ref": "AWS::Region"
+                    },
+                    ":",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":secret:",
+                    {
+                      "Ref": "SecretsManagerSecret"
+                    },
+                    "*"
+                  ]
+                ]
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "PolicyName": "SecretsManagerPolicy",
+        "Roles": [
+          {
+            "Ref": "CustomResourceRole"
+          },
+          {
+            "Ref": "ImageHandlerFunctionRole"
+          }
+        ]
+      },
+      "Condition": "EnableSignatureCondition"
+    },
+    "CustomResourceCheckSecretsManager": {
+      "Type": "Custom::CustomResource",
+      "Properties": {
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "CustomResourceFunction",
+            "Arn"
+          ]
+        },
+        "customAction": "checkSecretsManager",
+        "secretsManagerName": {
+          "Ref": "SecretsManagerSecret"
+        },
+        "secretsManagerKey": {
+          "Ref": "SecretsManagerKey"
+        }
+      },
+      "DependsOn": [
+        "CustomResourcePolicy",
+        "CustomResourceRole",
+        "SecretsManagerPolicy"
+      ],
+      "Condition": "EnableSignatureCondition"
+    },
+    "CustomResourceCheckFallbackImage": {
+      "Type": "Custom::CustomResource",
+      "Properties": {
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "CustomResourceFunction",
+            "Arn"
+          ]
+        },
+        "customAction": "checkFallbackImage",
+        "fallbackImageS3Bucket": {
+          "Ref": "FallbackImageS3Bucket"
+        },
+        "fallbackImageS3Key": {
+          "Ref": "FallbackImageS3Key"
+        }
+      },
+      "DependsOn": [
+        "CustomResourcePolicy",
+        "CustomResourceRole"
+      ],
+      "Condition": "EnableDefaultFallbackImageCondition"
+    },
+    "CustomCFLoggingBucket": {
+      "Type": "Custom::CustomResource",
+      "Properties": {
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "CustomResourceFunction",
+            "Arn"
+          ]
+        },
+        "customAction": "createCFLoggingBucket",
+        "stackName": {
+          "Ref": "AWS::StackName"
+        },
+        "bucketSuffix": {
+          "Fn::Join": [
+            "",
+            [
+              {
+                "Ref": "AWS::StackName"
+              },
+              {
+                "Ref": "AWS::Region"
+              },
+              {
+                "Ref": "AWS::AccountId"
+              }
+            ]
+          ]
+        },
+        "policy": {
+          "Action": "*",
+          "Condition": {
+            "Bool": {
+              "aws:SecureTransport": "false"
+            }
+          },
+          "Effect": "Deny",
+          "Principal": "*",
+          "Resource": "",
+          "Sid": "HttpsOnly"
+        }
+      },
+      "DependsOn": [
+        "CustomResourcePolicy",
+        "CustomResourceRole"
+      ],
+      "Condition": "IsOptInRegion"
     }
   },
   "Outputs": {
